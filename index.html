@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>הירח | חוויה אינטראקטיבית</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        body {
+            font-family: 'Myriad Pro', 'Myriad Hebrew', 'Myriad', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #020617;
+            color: #f1f5f9;
+            margin: 0;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        .dreamy-bg {
+            background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+        }
+
+        /* כוכבים מנצנצים ברקע - pointer-events: none מונע חסימת לחיצות על אלמנטים באתר */
+        .star-particle {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: twinkle var(--d) infinite ease-in-out;
+            pointer-events: none;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.2; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.2); }
+        }
+
+        /* עיצוב כוכבי הניווט */
+        .nav-star {
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            fill: #fef08a; /* צהוב בהיר */
+            filter: drop-shadow(0 0 8px rgba(254, 240, 138, 0.5));
+            z-index: 20;
+        }
+
+        .nav-star:hover {
+            transform: scale(1.3) translateY(-10px);
+            filter: drop-shadow(0 0 15px rgba(254, 240, 138, 0.8));
+        }
+
+        /* גלריה רוחבית הצידה */
+        .horizontal-scroll {
+            display: flex;
+            overflow-x: auto;
+            gap: 1.5rem;
+            padding: 1rem;
+            scroll-snap-type: x mandatory;
+            scrollbar-width: thin;
+            scrollbar-color: #fef08a transparent;
+        }
+
+        .horizontal-scroll::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .horizontal-scroll::-webkit-scrollbar-thumb {
+            background: #fef08a;
+            border-radius: 10px;
+        }
+
+        .photo-card {
+            flex: 0 0 240px;
+            height: 320px;
+            scroll-snap-align: start;
+            border-radius: 2rem;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .photo-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 10px 25px -5px rgba(254, 240, 138, 0.15);
+        }
+
+        .photo-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* אנימציה לירח הראשי */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        .animate-moon {
+            animation: float 6s infinite ease-in-out;
+        }
+
+        /* פוטר שלבי הירח */
+        .moon-phases-footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(2, 6, 23, 0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        /* אפקט הילה אקטיבית לשלב הירח הנוכחי */
+        .active-moon-phase {
+            filter: drop-shadow(0 0 15px rgba(254, 240, 138, 0.95));
+            animation: pulse-glow 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { transform: scale(1.2); opacity: 1; }
+            50% { transform: scale(1.28); opacity: 0.9; filter: drop-shadow(0 0 25px rgba(254, 240, 138, 1)); }
+        }
+
+        /* --- עיצוב שובל הכוכבים (ללא החלפת הסמן עצמו) --- */
+        .mouse-trail-star {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            color: #fef08a;
+            text-shadow: 0 0 10px rgba(254, 240, 138, 0.8);
+            font-size: 18px;
+            animation: starTrailAnim 0.8s ease-out forwards;
+        }
+
+        @keyframes starTrailAnim {
+            0% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+            100% { transform: translate(-50%, 80px) scale(0) rotate(180deg); opacity: 0; }
+        }
+    </style>
+
+    <script>
+        // פונקציית הגיבוי מוגדרת בראש הדף כדי למנוע ReferenceError בעת טעינת התמונות
+        function handleImageError(imgElement, label, fallbackUrl) {
+            imgElement.onerror = null; // מונע לולאה אינסופית
+            if (fallbackUrl) {
+                imgElement.src = fallbackUrl;
+            } else {
+                imgElement.src = 'https://placehold.co/500x500/0f172a/fef08a?text=' + encodeURIComponent(label);
+            }
+        }
+    </script>
+</head>
+<body class="dreamy-bg">
+
+    <!-- רקע כוכבים דינמי -->
+    <div id="starField" class="fixed inset-0 pointer-events-none z-0"></div>
+
+    <section id="hero" class="relative h-screen flex flex-col items-center justify-center text-center z-10">
+        <div class="animate-moon">
+            <!-- הגדלת התמונה try.png משמעותית עם הילה תואמת -->
+            <img src="try.png" 
+                 alt="Moon" 
+                 onerror="handleImageError(this, 'הירח', 'https://images.unsplash.com/photo-1522030239044-12f84813d100?q=80&w=1000&auto=format&fit=crop')"
+                 class="w-80 h-80 sm:w-[400px] sm:h-[400px] md:w-[480px] md:h-[480px] rounded-full shadow-[0_0_100px_rgba(255,255,255,0.15)] object-cover">
+        </div>
+        
+        <!-- חץ גלילה -->
+        <button onclick="scrollToId('nav-screen')" class="absolute bottom-12 animate-bounce text-white/40 hover:text-white transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"/></svg>
+        </button>
+    </section>
+
+    <section id="nav-screen" class="relative h-screen flex flex-col items-center justify-center z-10 px-6">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-12 md:gap-20 max-w-5xl w-full">
+            <!-- כוכב 1: מידע -->
+            <div class="nav-star flex flex-col items-center" onclick="scrollToId('info')">
+                <svg class="w-20 h-20" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <span class="mt-4 text-sm font-light">מידע</span>
+            </div>
+            <!-- כוכב 2: אומנות (במקום גלריה) -->
+            <div class="nav-star flex flex-col items-center" onclick="scrollToId('gallery')">
+                <svg class="w-20 h-20" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <span class="mt-4 text-sm font-light">אומנות</span>
+            </div>
+            <!-- כוכב 3: הצילומים שלי -->
+            <div class="nav-star flex flex-col items-center" onclick="scrollToId('my-photos')">
+                <svg class="w-20 h-20" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <span class="mt-4 text-sm font-bold text-yellow-200">הצילומים שלי</span>
+            </div>
+            <!-- כוכב 4: השפעת הירח -->
+            <div class="nav-star flex flex-col items-center" onclick="scrollToId('explain')">
+                <svg class="w-20 h-20" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <span class="mt-4 text-sm font-light">השפעת הירח</span>
+            </div>
+            <!-- כוכב 5: אתרים (במקום למה הירח) -->
+            <div class="nav-star flex flex-col items-center" onclick="scrollToId('links')">
+                <svg class="w-20 h-20" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <span class="mt-4 text-sm font-light">אתרים</span>
+            </div>
+        </div>
+    </section>
+
+    <main class="relative z-10 max-w-6xl mx-auto px-6 py-20 space-y-40">
+        
+        <!-- מידע על הירח -->
+        <section id="info" class="scroll-mt-20">
+            <h2 class="text-4xl font-bold text-yellow-100 mb-8 border-r-4 border-yellow-200 pr-6">מידע על הירח</h2>
+            <div class="bg-white/5 backdrop-blur-md p-8 md:p-12 rounded-[2.5rem] border border-white/10 leading-relaxed text-lg text-blue-50">
+                <p>הירח הוא הלוויין הטבעי היחיד של כדור הארץ. הוא נמצא במרחק ממוצע של כ-384,400 ק"מ מאיתנו. כוח המשיכה שלו חלש פי 6 מזה של כדור הארץ, מה שמאפשר לאסטרונאוטים לקפוץ לגובה רב. הירח תמיד מפנה אלינו את אותו הצד, ולכן אנחנו לא רואים את "הצד האפל" שלו מכדור הארץ.</p>
+            </div>
+        </section>
+
+        <!-- אומנות (במקום רגעים קסומים) -->
+        <section id="gallery" class="scroll-mt-20">
+            <h2 class="text-4xl font-bold text-yellow-100 mb-10 border-r-4 border-yellow-200 pr-6">אומנות</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                <div class="relative rounded-3xl overflow-hidden h-[280px] md:h-[350px] shadow-2xl border border-white/10 bg-white/5 p-3 flex items-center justify-center">
+                    <img src="doodle.png" 
+                         onerror="handleImageError(this, 'שרבוט ירח', 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?q=80&w=800')" 
+                         class="max-w-full max-h-full object-contain drop-shadow-xl" 
+                         alt="Doodle">
+                </div>
+                <div class="relative rounded-3xl overflow-hidden h-[280px] md:h-[350px] shadow-2xl border border-white/10 bg-white/5 p-3 flex items-center justify-center">
+                    <img src="poem.png" 
+                         onerror="handleImageError(this, 'שיר הירח', 'https://images.unsplash.com/photo-1455390582262-044cdead277a?q=80&w=800')" 
+                         class="max-w-full max-h-full object-contain drop-shadow-xl" 
+                         alt="Poem">
+                </div>
+                <div class="relative rounded-3xl overflow-hidden h-[280px] md:h-[350px] shadow-2xl border border-white/10 bg-white/5 p-3 flex items-center justify-center">
+                    <img src="new.jpeg" 
+                         onerror="handleImageError(this, 'אומנות חדשה', 'https://images.unsplash.com/photo-1532693322450-2cb5c511067d?q=80&w=800')" 
+                         class="max-w-full max-h-full object-contain drop-shadow-xl" 
+                         alt="New Art">
+                </div>
+            </div>
+        </section>
+
+        <!-- הצילומים שלי (ללא אפשרות הוספה, טאטו מועבר לסוף) -->
+        <section id="my-photos" class="scroll-mt-20">
+            <div class="flex flex-col md:flex-row justify-between items-end mb-10 gap-6">
+                <div>
+                    <h2 class="text-4xl font-bold text-yellow-100 border-r-4 border-yellow-200 pr-6">הצילומים שלי</h2>
+                </div>
+            </div>
+            
+            <div id="personalGallery" class="horizontal-scroll min-h-[350px] border-2 border-white/5 rounded-[2.5rem]">
+                <!-- כל קובצי ה-PNG שלך - tattoo הועבר לסוף הרוטציה -->
+                <div class="photo-card">
+                    <img src="moonsunset.png" alt="שקיעה וירח" onerror="handleImageError(this, 'שקיעה וירח', 'https://images.unsplash.com/photo-1616712134499-a1107f979724?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moonevening.png" alt="ערב ירחי" onerror="handleImageError(this, 'ערב ירחי', 'https://images.unsplash.com/photo-1504333638930-c8787059b04c?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon3.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1479030160180-b1860951d696?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon4.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon5.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1506330109204-f15d194d9b50?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon6.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1532693322450-2cb5c511067d?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon7.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon9.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1532054238706-f14d99436be3?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon10.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1447069387593-a5de0862481e?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon11.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1475274047050-1d0c0975c63e?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon12.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1522030239044-12f84813d100?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon13.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1501436513145-30f24e19fbc8?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon14.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1495107334309-fcf20504a5ab?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon15.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1514894780063-1405f4e216f9?q=80&w=500')">
+                </div>
+                <div class="photo-card">
+                    <img src="moon16.png" alt="צילום ירח" onerror="handleImageError(this, 'צילום ירח', 'https://images.unsplash.com/photo-1531266752426-aad472b7bbf4?q=80&w=500')">
+                </div>
+                <!-- tattoo.png ממוקמת כעת כאן - בסוף הרוטציה של הגלריה הרוחבית -->
+                <div class="photo-card">
+                    <img src="tattoo.png" alt="קעקוע ירח" onerror="handleImageError(this, 'קעקוע ירח', 'https://images.unsplash.com/photo-1516339901601-2e1b62dc0c45?q=80&w=500')">
+                </div>
+            </div>
+        </section>
+
+        <!-- קישורים והסבר -->
+        <div class="grid md:grid-cols-2 gap-16">
+            <section id="links" class="scroll-mt-20">
+                <h2 class="text-2xl font-bold text-yellow-100 mb-8 border-r-2 border-yellow-200 pr-4">אתרים מומלצים</h2>
+                <div class="space-y-4">
+                    <a href="https://moon.nasa.gov" target="_blank" class="block p-6 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all">פורטל הירח של נאס"א (NASA)</a>
+                    <a href="https://he.wikipedia.org/wiki/%D7%94%D7%99%D7%A8%D7%97" target="_blank" class="block p-6 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all">ערך הירח בויקיפדיה</a>
+                </div>
+            </section>
+            
+            <section id="explain" class="scroll-mt-20">
+                <h2 class="text-2xl font-bold text-yellow-100 mb-8 border-r-2 border-yellow-200 pr-4">השפעת הירח</h2>
+                <p class="text-blue-100/70 leading-relaxed">
+                    הירח הוא המצפן הלילי שלנו. מעבר ליופי שלו, הוא שומר על יציבות הציר של כדור הארץ, מה שמאפשר אקלים יציב וחיים. הוא הגורם המרכזי לתופעת הגאות והשפל ומקור השראה אינסופי לאורך הדורות.
+                </p>
+            </section>
+        </div>
+    </main>
+
+    <!-- פוטר שלבי הירח האינטראקטיבי (ללא כיתוב המשפט של הכוכבים) -->
+    <footer class="moon-phases-footer mt-40 pb-20 pt-10">
+        <div class="max-w-4xl mx-auto px-6">
+            
+            <!-- כרטיס מצב ירח דינמי אינטראקטיבי -->
+            <div class="bg-white/5 border border-white/10 rounded-[2rem] p-6 max-w-xl mx-auto mb-12 text-center backdrop-blur-md">
+                <h3 class="text-xl font-bold text-yellow-100 mb-2">מצב הירח בזמן אמת 🌙</h3>
+                <p id="lunarCoordinatesDesc" class="text-xs text-white/40 mb-4">מחושב אוטומטית לפי שעון המערכת והמיקום שלכם</p>
+                
+                <!-- רכיב חקירת תאריכים -->
+                <div class="flex items-center justify-center gap-3 mb-6 bg-slate-950/40 p-2 rounded-xl max-w-xs mx-auto">
+                    <label for="moonDatePicker" class="text-xs text-yellow-100/80 font-semibold cursor-pointer">בדיקת תאריך אחר:</label>
+                    <input type="date" id="moonDatePicker" class="bg-slate-900 border border-yellow-200/20 rounded px-2 py-1 text-xs text-yellow-100 focus:outline-none focus:border-yellow-200 cursor-pointer">
+                </div>
+                
+                <div class="grid grid-cols-3 gap-4 items-center bg-slate-950/60 p-4 rounded-2xl">
+                    <div class="border-l border-white/5 last:border-0 pl-2">
+                        <span class="text-[10px] text-white/50 block font-light">שלב הירח</span>
+                        <span id="activePhaseName" class="text-xs font-bold text-yellow-100 block mt-1 leading-tight">-</span>
+                    </div>
+                    <div class="border-l border-white/5 last:border-0 pl-2">
+                        <span class="text-[10px] text-white/50 block font-light">אחוז הארה</span>
+                        <span id="activePhaseIllum" class="text-sm font-bold text-white block mt-1">-</span>
+                    </div>
+                    <div class="last:border-0 pl-2">
+                        <span class="text-[10px] text-white/50 block font-light">גיל הירח</span>
+                        <span id="activePhaseAge" class="text-xs font-bold text-white/80 block mt-1">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- רשימת שלבי הירח המודגשת דינמית -->
+            <div class="flex justify-between items-center text-center gap-2">
+                <div id="phase-0" class="flex flex-col items-center opacity-40 transition-all duration-500 flex-1">
+                    <span class="text-2xl md:text-3xl mb-2 select-none">🌑</span>
+                    <span class="text-[9px] md:text-[10px] uppercase tracking-tighter block whitespace-nowrap">מולד</span>
+                </div>
+                <div id="phase-1" class="flex flex-col items-center opacity-40 transition-all duration-500 flex-1">
+                    <span class="text-2xl md:text-3xl mb-2 select-none">🌒</span>
+                    <span class="text-[9px] md:text-[10px] uppercase tracking-tighter block whitespace-nowrap">סהר עולה</span>
+                </div>
+                <div id="phase-2" class="flex flex-col items-center opacity-40 transition-all duration-500 flex-1">
+                    <span class="text-2xl md:text-3xl mb-2 select-none">🌓</span>
+                    <span class="text-[9px] md:text-[10px] uppercase tracking-tighter block whitespace-nowrap">רבע ראשון</span>
+                </div>
+                <div id="phase-3" class="flex flex-col items-center opacity-40 transition-all duration-500 flex-1">
+                    <span class="text-2xl md:text-3xl mb-2 select-none">🌔</span>
+                    <span class="text-[9px] md:text-[10px] uppercase tracking-tighter block whitespace-nowrap">גבנוני עולה</span>
+                </div>
+                <div id="phase-4" class="flex flex-col items-center opacity-40 transition-all duration-500 flex-1">
+                    <span class="text-2xl md:text-3xl mb-2 select-none">🌕</span>
+                    <span class="text-[9px] md:text-[10px] uppercase tracking-tighter block whitespace-nowrap">ירח מלא</span>
+                </div>
+                <div id="phase-5" class="flex flex-col items-center opacity-40 transition-all duration-500 flex-1">
+                    <span class="text-2xl md:text-3xl mb-2 select-none">🌖</span>
+                    <span class="text-[9px] md:text-[10px] uppercase tracking-tighter block whitespace-nowrap">גבנוני דועך</span>
+                </div>
+                <div id="phase-6" class="flex flex-col items-center opacity-40 transition-all duration-500 flex-1">
+                    <span class="text-2xl md:text-3xl mb-2 select-none">🌗</span>
+                    <span class="text-[9px] md:text-[10px] uppercase tracking-tighter block whitespace-nowrap">רבע אחרון</span>
+                </div>
+                <div id="phase-7" class="flex flex-col items-center opacity-40 transition-all duration-500 flex-1">
+                    <span class="text-2xl md:text-3xl mb-2 select-none">🌘</span>
+                    <span class="text-[9px] md:text-[10px] uppercase tracking-tighter block whitespace-nowrap">סהר דועך</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // פונקציית גלילה חלקה
+        function scrollToId(id) {
+            const el = document.getElementById(id);
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // יצירת כוכבי רקע אקראיים ללא חסימת לחיצות
+        function initBackgroundStars() {
+            const field = document.getElementById('starField');
+            const count = 150;
+            for (let i = 0; i < count; i++) {
+                const star = document.createElement('div');
+                star.className = 'star-particle';
+                const x = Math.random() * 100;
+                const y = Math.random() * 100;
+                const size = Math.random() * 2 + 1;
+                const duration = Math.random() * 3 + 2;
+                
+                star.style.left = `${x}%`;
+                star.style.top = `${y}%`;
+                star.style.width = `${size}px`;
+                star.style.height = `${size}px`;
+                star.style.setProperty('--d', `${duration}s`);
+                field.appendChild(star);
+            }
+        }
+
+        // מבוסס על המחזור הסינודי הממוצע של 29.53059 ימים
+        function calculateMoonPhase(date) {
+            // נקודת ייחוס של מולד ירח ידוע (Jan 6, 2000 18:14 UTC)
+            const referenceNewMoon = new Date(Date.UTC(2000, 0, 6, 18, 14, 0));
+            const synodicMonth = 29.530588853; // אורך חודש ירחי ממוצע בימים
+            
+            // הפרש מילישניות והמרה לימים
+            const diffTime = date.getTime() - referenceNewMoon.getTime();
+            const diffDays = diffTime / (1000 * 60 * 60 * 24);
+            
+            // כמה מחזורים שלמים עברו
+            const cycles = diffDays / synodicMonth;
+            // חלק השבר של המחזור הנוכחי (ערך בין 0 ל-1)
+            let currentPercentage = cycles - Math.floor(cycles);
+            if (currentPercentage < 0) currentPercentage += 1;
+            
+            // גיל הירח בימים
+            const moonAgeDays = currentPercentage * synodicMonth;
+            
+            // חישוב אחוז ההארה (מבוסס על הזווית יחסית לשמש)
+            const angle = currentPercentage * 2 * Math.PI;
+            const illuminationPercent = ((1 - Math.cos(angle)) / 2) * 100;
+            
+            // הגדרת 8 שלבי הירח המרכזיים
+            let phaseIndex = 0;
+            let phaseName = "";
+            
+            if (moonAgeDays < 1.845 || moonAgeDays >= 27.68) {
+                phaseIndex = 0; // מולד הירח
+                phaseName = "מולד הירח (New Moon)";
+            } else if (moonAgeDays >= 1.845 && moonAgeDays < 5.53) {
+                phaseIndex = 1; // סהר עולה
+                phaseName = "סהר עולה (Waxing Crescent)";
+            } else if (moonAgeDays >= 5.53 && moonAgeDays < 9.22) {
+                phaseIndex = 2; // רבע ראשון
+                phaseName = "רבע ראשון (First Quarter)";
+            } else if (moonAgeDays >= 9.22 && moonAgeDays < 12.91) {
+                phaseIndex = 3; // גבנוני עולה
+                phaseName = "גבנוני עולה (Waxing Gibbous)";
+            } else if (moonAgeDays >= 12.91 && moonAgeDays < 16.60) {
+                phaseIndex = 4; // ירח מלא
+                phaseName = "ירח מלא (Full Moon)";
+            } else if (moonAgeDays >= 16.60 && moonAgeDays < 20.30) {
+                phaseIndex = 5; // גבנוני דועך
+                phaseName = "גבנוני דועך (Waning Gibbous)";
+            } else if (moonAgeDays >= 20.30 && moonAgeDays < 23.99) {
+                phaseIndex = 6; // רבע אחרון
+                phaseName = "רבע אחרון (Last Quarter)";
+            } else {
+                phaseIndex = 7; // סהר דועך
+                phaseName = "סהר דועך (Waning Crescent)";
+            }
+            
+            return {
+                index: phaseIndex,
+                name: phaseName,
+                age: moonAgeDays.toFixed(1),
+                illumination: Math.round(illuminationPercent)
+            };
+        }
+
+        // עדכון מצב הירח הפעיל והדגשתו
+        function updateActiveMoonPhase(date) {
+            const moonInfo = calculateMoonPhase(date);
+            
+            // עדכון כרטיס המידע האינטראקטיבי
+            document.getElementById('activePhaseName').textContent = moonInfo.name;
+            document.getElementById('activePhaseIllum').textContent = moonInfo.illumination + "%";
+            document.getElementById('activePhaseAge').textContent = moonInfo.age + " ימים";
+            
+            // ניקוי הדגשות קודמות
+            for (let i = 0; i < 8; i++) {
+                const phaseEl = document.getElementById(`phase-${i}`);
+                if (phaseEl) {
+                    phaseEl.classList.remove('active-moon-phase', 'scale-125', 'text-yellow-100');
+                    phaseEl.classList.add('opacity-40');
+                }
+            }
+            
+            // הדגשת שלב הירח האקטיבי הנוכחי
+            const activeEl = document.getElementById(`phase-${moonInfo.index}`);
+            if (activeEl) {
+                activeEl.classList.add('active-moon-phase', 'text-yellow-100');
+                activeEl.classList.remove('opacity-40');
+            }
+        }
+
+        // אתחול האתר וטעינת ההגדרות
+        window.onload = function() {
+            initBackgroundStars();
+            
+            // הגדרת תאריך ברירת מחדל להיום בבורר התאריכים
+            const today = new Date();
+            const dateInput = document.getElementById('moonDatePicker');
+            
+            // פורמט תאריך ל-input (YYYY-MM-DD)
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            dateInput.value = `${year}-${month}-${day}`;
+            
+            // עדכון ראשוני של שלב הירח הפעיל להיום
+            updateActiveMoonPhase(today);
+            
+            // מאזין לשינוי תאריך בבורר
+            dateInput.addEventListener('change', function(e) {
+                if (e.target.value) {
+                    const selectedDate = new Date(e.target.value);
+                    updateActiveMoonPhase(selectedDate);
+                }
+            });
+
+            // הפעלת אפקט שובל הכוכבים של העכבר
+            initMouseTrail();
+        };
+
+        // פונקציה ליצירת שובל כוכבים בעקבות העכבר
+        function initMouseTrail() {
+            let lastStarTime = 0;
+            const throttleMs = 35; // קצב יצירת הכוכבים
+
+            document.addEventListener('mousemove', function(e) {
+                const now = Date.now();
+                if (now - lastStarTime > throttleMs) {
+                    createTrailStar(e.clientX, e.clientY);
+                    lastStarTime = now;
+                }
+            });
+        }
+
+        function createTrailStar(x, y) {
+            const star = document.createElement('div');
+            star.className = 'mouse-trail-star';
+            
+            // בחירת צורת כוכב אקראית לשובל
+            const stars = ['✦', '✨', '⋆', '✧'];
+            star.innerHTML = stars[Math.floor(Math.random() * stars.length)];
+            
+            // פיזור קל סביב סמן העכבר
+            const offsetX = (Math.random() - 0.5) * 15;
+            const offsetY = (Math.random() - 0.5) * 15;
+            
+            star.style.left = (x + offsetX) + 'px';
+            star.style.top = (y + offsetY) + 'px';
+            
+            document.body.appendChild(star);
+            
+            // הסרת הכוכב מה-DOM לאחר סיום האנימציה
+            setTimeout(() => {
+                star.remove();
+            }, 800);
+        }
+    </script>
+</body>
+</html>
